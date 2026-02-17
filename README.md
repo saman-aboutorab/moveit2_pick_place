@@ -130,7 +130,7 @@ Pick-and-place control node
 
 Planning scene object management
 
-How to Run (Placeholder — update after implementation)
+How to Run
 
 Build:
 
@@ -138,13 +138,34 @@ cd ros2_ws
 colcon build
 source install/setup.bash
 
-Launch simulation:
+Display robot in RViz (no simulation):
 
-ros2 launch arm_bringup simulation.launch.py
+ros2 launch arm_bringup display.launch.py
 
-Run pick-and-place demo:
+In RViz: Add > RobotModel, set Fixed Frame to panda_link0.
+Use the Joint State Publisher GUI sliders to move joints.
 
-ros2 run pick_place_control run_demo
+Launch Gazebo simulation:
+
+ros2 launch arm_bringup gazebo.launch.py
+
+This starts Gazebo with the table, objects, and robot.
+Controllers (arm + gripper + joint state broadcaster) are spawned automatically.
+
+Launch MoveIt2 planning (without Gazebo, mock controllers):
+
+ros2 launch arm_moveit_config move_group.launch.py
+
+This starts move_group, RViz with MotionPlanning panel, and mock controllers.
+In RViz: drag the goal pose marker, click Plan, then Execute.
+
+Load planning scene collision objects (in a separate terminal while move_group is running):
+
+ros2 run pick_place_control planning_scene_loader
+
+This adds the table and objects as collision objects in MoveIt2's planning scene.
+The planner will now generate trajectories that avoid these objects.
+
 Milestones
 
  Gazebo world loads with robot and objects

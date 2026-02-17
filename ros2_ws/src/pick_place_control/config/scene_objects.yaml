@@ -1,0 +1,18 @@
+scene_objects:
+  - id: "table"
+    type: "box"
+    dimensions: [0.6, 1.0, 0.75]       # x, y, z size in meters
+    position: [0.6, 0.0, 0.375]         # center of the box (half height = 0.375)
+    orientation: [0.0, 0.0, 0.0, 1.0]   # quaternion x, y, z, w
+
+  - id: "red_box"
+    type: "box"
+    dimensions: [0.04, 0.04, 0.04]
+    position: [0.5, 0.0, 0.77]          # on top of table (0.75 + half of 0.04)
+    orientation: [0.0, 0.0, 0.0, 1.0]
+
+  - id: "blue_cylinder"
+    type: "cylinder"
+    dimensions: [0.08, 0.02]              # [height, radius]
+    position: [0.6, 0.2, 0.79]          # on top of table (0.75 + half of 0.08)
+    orientation: [0.0, 0.0, 0.0, 1.0]
