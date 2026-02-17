@@ -27,7 +27,9 @@ def generate_launch_description():
 
     # Process xacro to URDF
     urdf_path = PathJoinSubstitution([
+        pkg_arm_bringup, 'urdf', 'panda.urdf.xacro'
     ])
+
     robot_description = Command([
         'xacro ', urdf_path,
         ' ros2_control_hardware_type:=gz_ros2_control'
@@ -52,8 +54,34 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Spawn controllers
+    joint_state_broadcaster = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['joint_state_broadcaster'],
+        output='screen',
+    )
+
+    arm_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['panda_arm_controller'],
+        output='screen',
+    )
+
+    hand_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['panda_hand_controller'],
+        output='screen',
+    )
+
     return LaunchDescription([
         gazebo,
         robot_state_publisher,
         spawn_robot,
+        joint_state_broadcaster,
+        arm_controller,
+        hand_controller,
     ])
+
