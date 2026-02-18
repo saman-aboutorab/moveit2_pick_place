@@ -166,6 +166,24 @@ ros2 run pick_place_control planning_scene_loader
 This adds the table and objects as collision objects in MoveIt2's planning scene.
 The planner will now generate trajectories that avoid these objects.
 
+Run the pick-and-place sequence (in a separate terminal while move_group is running):
+
+ros2 run pick_place_control pick_place_node
+
+This executes the full autonomous pick-and-place pipeline:
+1. Moves to home position
+2. Loads collision objects into the planning scene
+3. Opens gripper
+4. Moves to pre-grasp pose above the target object
+5. Descends to grasp pose (Cartesian path)
+6. Closes gripper and attaches object in planning scene
+7. Lifts object
+8. Moves to place location
+9. Opens gripper and detaches object
+10. Retreats upward and returns to home
+
+The node uses pymoveit2 for motion planning and gripper control via MoveIt2.
+
 Milestones
 
  Gazebo world loads with robot and objects

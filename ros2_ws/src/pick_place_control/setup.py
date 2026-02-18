@@ -26,6 +26,8 @@ setup(
     entry_points={
         'console_scripts': [
             'planning_scene_loader = pick_place_control.planning_scene_loader:main',
+            'pick_place_node = pick_place_control.pick_place_node:main',
         ],
     },
+
 )
