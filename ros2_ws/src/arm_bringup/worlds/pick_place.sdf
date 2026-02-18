@@ -39,16 +39,16 @@
       </link>
     </model>
 
-    <!-- Table -->
+    <!-- Table (matches scene_objects.yaml: 0.4 x 0.8 x 0.4m) -->
     <model name="table">
       <static>true</static>
-      <pose>0.6 0 0.375 0 0 0</pose>
+      <pose>0.7 0 0.2 0 0 0</pose>
       <link name="link">
         <collision name="collision">
-          <geometry><box><size>0.6 0.8 0.75</size></box></geometry>
+          <geometry><box><size>0.4 0.8 0.4</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>0.6 0.8 0.75</size></box></geometry>
+          <geometry><box><size>0.4 0.8 0.4</size></box></geometry>
           <material>
             <ambient>0.6 0.4 0.2 1</ambient>
             <diffuse>0.6 0.4 0.2 1</diffuse>
@@ -57,21 +57,21 @@
       </link>
     </model>
 
-    <!-- Box object on table -->
-    <model name="box1">
-      <pose>0.5 0.0 0.775 0 0 0</pose>
+    <!-- Red box on table (matches scene_objects.yaml: 0.04m cube at x=0.6) -->
+    <model name="red_box">
+      <pose>0.6 0.0 0.42 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.1</mass>
           <inertia>
-            <ixx>0.0000167</ixx><iyy>0.0000167</iyy><izz>0.0000167</izz>
+            <ixx>0.0000267</ixx><iyy>0.0000267</iyy><izz>0.0000267</izz>
           </inertia>
         </inertial>
         <collision name="collision">
-          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
           <material>
             <ambient>0.8 0.0 0.0 1</ambient>
             <diffuse>0.8 0.0 0.0 1</diffuse>
@@ -80,21 +80,21 @@
       </link>
     </model>
 
-    <!-- Cylinder object on table -->
-    <model name="cylinder1">
-      <pose>0.6 0.2 0.775 0 0 0</pose>
+    <!-- Blue cylinder on table (matches scene_objects.yaml: h=0.08 r=0.02 at x=0.7) -->
+    <model name="blue_cylinder">
+      <pose>0.7 0.2 0.44 0 0 0</pose>
       <link name="link">
         <inertial>
           <mass>0.1</mass>
           <inertia>
-            <ixx>0.0000167</ixx><iyy>0.0000167</iyy><izz>0.0000167</izz>
+            <ixx>0.0000573</ixx><iyy>0.0000573</iyy><izz>0.0000200</izz>
           </inertia>
         </inertial>
         <collision name="collision">
-          <geometry><cylinder><radius>0.015</radius><length>0.05</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.02</radius><length>0.08</length></cylinder></geometry>
         </collision>
         <visual name="visual">
-          <geometry><cylinder><radius>0.015</radius><length>0.05</length></cylinder></geometry>
+          <geometry><cylinder><radius>0.02</radius><length>0.08</length></cylinder></geometry>
           <material>
             <ambient>0.0 0.0 0.8 1</ambient>
             <diffuse>0.0 0.0 0.8 1</diffuse>

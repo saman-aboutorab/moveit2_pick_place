@@ -11,6 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/scene_objects.yaml']),
+        ('share/' + package_name + '/launch', ['launch/pick_place_demo.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

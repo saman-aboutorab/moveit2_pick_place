@@ -99,7 +99,7 @@ Replacing fixed grasp poses with perception-driven estimation
 The manipulation execution pipeline (MoveIt2) will remain unchanged.
 
 Repository Structure
-embodied_manipulation/
+moveit2_pick_place/
 │
 ├── ros2_ws/
 │   ├── src/
@@ -184,6 +184,13 @@ This executes the full autonomous pick-and-place pipeline:
 
 The node uses pymoveit2 for motion planning and gripper control via MoveIt2.
 
+Run the full demo with a single command:
+
+ros2 launch pick_place_control pick_place_demo.launch.py
+
+This launches everything in one go: move_group, RViz, mock controllers, and the
+pick-and-place node. The pick-and-place sequence starts automatically after a delay.
+
 Milestones
 
  Gazebo world loads with robot and objects
@@ -230,11 +237,3 @@ Author
 
 Saman Aboutorab
 AI Systems Architect → Robotics & Embodied Intelligence
-
-If you’d like, I can now:
-
-Add a small architecture diagram version for recruiters
-
-Write a short 3-line “resume description” you can use later
-
-Or refine this to match your exact ROS2 + robot choice (Panda vs UR5e)
