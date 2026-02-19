@@ -76,6 +76,18 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Bridge Gazebo camera topics to ROS2
+    gz_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=[
+            '/rgbd_camera/image@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/rgbd_camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/rgbd_camera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo',
+        ],
+        output='screen',
+    )
+
     return LaunchDescription([
         gazebo,
         robot_state_publisher,
@@ -83,5 +95,6 @@ def generate_launch_description():
         joint_state_broadcaster,
         arm_controller,
         hand_controller,
+        gz_bridge,
     ])
 
