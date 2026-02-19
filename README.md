@@ -82,10 +82,48 @@ Phase 2 — Vision-Based Perception Upgrade
 
 Phase 2A: AprilTag + RGB-D Pose Estimation
 
-Add a simulated RGB-D camera to the Gazebo scene
-Attach AprilTags to target objects
-Detect tags using OpenCV and estimate 6D pose via PnP
-Feed detected pose to MoveIt2 — replacing hardcoded grasp coordinates
+Instead of hardcoded grasp coordinates, the robot sees the object through a camera,
+detects an AprilTag on it, computes the object's 3D pose, and sends that pose to
+MoveIt2 for grasp planning.
+
+Node architecture:
+
+  Gazebo (RGB-D camera) → ros_gz_bridge → pose_estimator node → /detected_pose → pick_place_node → MoveIt2
+
+Components:
+
+1. RGB-D camera in Gazebo (pick_place.sdf)
+   - Fixed camera mounted at an angle looking at the table
+   - Publishes RGB image and depth topics via gz-sim-sensors-system
+   - ros_gz_bridge forwards Gazebo topics to ROS2
+
+2. AprilTag on the red box (pick_place.sdf)
+   - Tag36h11 family, ID 0, known physical size (0.03m)
+   - Applied as a texture on one face of the red box
+
+3. Pose estimator node (pick_place_control/pose_estimator.py)
+   - Subscribes to /camera/image (RGB)
+   - Detects AprilTag using pupil-apriltags library
+   - Computes 6D pose via cv2.solvePnP with known tag size + camera intrinsics
+   - Transforms pose from camera frame to panda_link0 frame using TF2
+   - Publishes result on /detected_pose (PoseStamped)
+
+4. Modified pick-and-place node (pick_place_control/pick_place_node.py)
+   - Subscribes to /detected_pose instead of using hardcoded coordinates
+   - Computes pre-grasp/grasp/place poses relative to detected object
+   - Gripper control, attach/detach, and planning scene remain unchanged
+
+Implementation steps:
+  Step 1: Add RGB-D camera sensor to Gazebo world (arm_bringup)
+  Step 2: Add ros_gz_bridge to forward camera topics to ROS2 (arm_bringup)
+  Step 3: Add AprilTag texture to the red box (arm_bringup)
+  Step 4: Create pose_estimator node — AprilTag detection + PnP (pick_place_control)
+  Step 5: Modify pick_place_node to use detected pose (pick_place_control)
+  Step 6: Update demo launch to include bridge + estimator (pick_place_control)
+  Step 7: Test end-to-end
+
+Dependencies: ros-jazzy-ros-gz-bridge, ros-jazzy-cv-bridge, pupil-apriltags (pip), tf2_ros
+
 Technologies: OpenCV, cv_bridge, AprilTag, Gazebo depth camera plugin
 
 Phase 2B: YOLO + Depth Centroid
