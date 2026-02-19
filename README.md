@@ -78,25 +78,31 @@ Return to home
 
 The goal is reliability and clean architecture before introducing AI perception.
 
-Planned Phase 2 — Embodied AI Upgrade
+Phase 2 — Vision-Based Perception Upgrade
 
-Future version will support commands like:
+Phase 2A: AprilTag + RGB-D Pose Estimation
 
-“Pick up the red mug and place it in the blue bin.”
+Add a simulated RGB-D camera to the Gazebo scene
+Attach AprilTags to target objects
+Detect tags using OpenCV and estimate 6D pose via PnP
+Feed detected pose to MoveIt2 — replacing hardcoded grasp coordinates
+Technologies: OpenCV, cv_bridge, AprilTag, Gazebo depth camera plugin
 
-Enhancements will include:
+Phase 2B: YOLO + Depth Centroid
 
-Open-vocabulary vision (CLIP / VLM)
+Replace AprilTags with YOLO-based object detection
+Use depth image to compute 3D centroid of detected objects
+Handle arbitrary objects without fiducial markers
+Technologies: YOLOv8, depth processing, ROS2 image pipeline
 
-Object segmentation
+Phase 2C: Open-Vocabulary Language-Guided Grasping
 
-Depth-based 3D pose estimation
+Accept natural language commands: "Pick up the red box"
+Use a vision-language model (OWL-ViT / GroundingDINO) for open-vocabulary detection
+Parse text commands to identify target object and placement
+Technologies: VLM, text-to-task parsing, semantic scene reasoning
 
-Text-to-task parsing
-
-Replacing fixed grasp poses with perception-driven estimation
-
-The manipulation execution pipeline (MoveIt2) will remain unchanged.
+The manipulation execution pipeline (MoveIt2) remains unchanged across all phases.
 
 Repository Structure
 moveit2_pick_place/
@@ -175,14 +181,12 @@ This executes the full autonomous pick-and-place pipeline:
 2. Loads collision objects into the planning scene
 3. Opens gripper
 4. Moves to pre-grasp pose above the target object
-5. Descends to grasp pose (Cartesian path)
+5. Descends to grasp pose
 6. Closes gripper and attaches object in planning scene
 7. Lifts object
 8. Moves to place location
 9. Opens gripper and detaches object
 10. Retreats upward and returns to home
-
-The node uses pymoveit2 for motion planning and gripper control via MoveIt2.
 
 Run the full demo with a single command:
 
