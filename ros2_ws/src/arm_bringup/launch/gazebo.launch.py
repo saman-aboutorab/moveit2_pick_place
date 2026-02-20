@@ -1,6 +1,6 @@
 import os
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import AppendEnvironmentVariable, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
@@ -11,6 +11,12 @@ from launch.substitutions import Command
 def generate_launch_description():
     pkg_arm_bringup = FindPackageShare('arm_bringup')
     pkg_ros_gz_sim = FindPackageShare('ros_gz_sim')
+
+    # Let Gazebo find our custom models (e.g. red_box_apriltag)
+    set_gz_resource_path = AppendEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=PathJoinSubstitution([pkg_arm_bringup, 'models']),
+    )
 
     # World file
     world_file = PathJoinSubstitution([
@@ -89,6 +95,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        set_gz_resource_path,
         gazebo,
         robot_state_publisher,
         spawn_robot,
