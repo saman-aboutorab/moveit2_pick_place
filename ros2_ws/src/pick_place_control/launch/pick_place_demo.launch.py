@@ -15,8 +15,18 @@ def generate_launch_description():
                 "launch",
                 "move_group.launch.py",
             ])
-        )
+        ),
+        launch_arguments={'use_gazebo': 'true'}.items(),
     )
+
+    # Pose estimator — detects AprilTag and publishes /detected_pose
+    pose_estimator = Node(
+        package="pick_place_control",
+        executable="pose_estimator",
+        output="screen",
+        parameters=[{'use_sim_time': True}],
+    )
+
 
     # Pick-and-place node — delayed to let move_group fully initialize
     pick_place_node = TimerAction(
@@ -26,11 +36,15 @@ def generate_launch_description():
                 package="pick_place_control",
                 executable="pick_place_node",
                 output="screen",
+                parameters=[{'use_sim_time': True}],
             )
+
         ],
     )
 
     return LaunchDescription([
         move_group_launch,
+        pose_estimator,
         pick_place_node,
     ])
+
