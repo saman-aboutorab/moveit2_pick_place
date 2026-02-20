@@ -28,6 +28,7 @@ setup(
         'console_scripts': [
             'planning_scene_loader = pick_place_control.planning_scene_loader:main',
             'pick_place_node = pick_place_control.pick_place_node:main',
+            'pose_estimator = pick_place_control.pose_estimator:main',
         ],
     },
 

@@ -1,0 +1,51 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="red_box_apriltag">
+    <link name="link">
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.0000267</ixx>
+          <iyy>0.0000267</iyy>
+          <izz>0.0000267</izz>
+        </inertia>
+      </inertial>
+
+      <collision name="collision">
+        <geometry>
+          <box><size>0.04 0.04 0.04</size></box>
+        </geometry>
+      </collision>
+
+      <!-- Red box body -->
+      <visual name="box_visual">
+        <geometry>
+          <box><size>0.04 0.04 0.04</size></box>
+        </geometry>
+        <material>
+          <ambient>0.8 0.0 0.0 1</ambient>
+          <diffuse>0.8 0.0 0.0 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- AprilTag on top face (thin plane sitting on top of the box) -->
+      <visual name="apriltag_visual">
+        <pose>0 0 0.021 0 0 0</pose>
+        <geometry>
+          <box><size>0.04 0.04 0.001</size></box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>model://red_box_apriltag/materials/textures/tag36h11_id0.png</albedo_map>
+              <metalness>0.0</metalness>
+              <roughness>0.9</roughness>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

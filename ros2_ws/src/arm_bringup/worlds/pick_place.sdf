@@ -12,6 +12,9 @@
     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
 
     <!-- Lighting -->
     <light type="directional" name="sun">
@@ -57,28 +60,12 @@
       </link>
     </model>
 
-    <!-- Red box on table (matches scene_objects.yaml: 0.04m cube at x=0.6) -->
-    <model name="red_box">
+    <!-- Red box with AprilTag on top (tag36h11 ID 0, 0.04m cube at x=0.6) -->
+    <include>
+      <uri>model://red_box_apriltag</uri>
+      <name>red_box</name>
       <pose>0.6 0.0 0.42 0 0 0</pose>
-      <link name="link">
-        <inertial>
-          <mass>0.1</mass>
-          <inertia>
-            <ixx>0.0000267</ixx><iyy>0.0000267</iyy><izz>0.0000267</izz>
-          </inertia>
-        </inertial>
-        <collision name="collision">
-          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
-          <material>
-            <ambient>0.8 0.0 0.0 1</ambient>
-            <diffuse>0.8 0.0 0.0 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
+    </include>
 
     <!-- Blue cylinder on table (matches scene_objects.yaml: h=0.08 r=0.02 at x=0.7) -->
     <model name="blue_cylinder">
@@ -100,6 +87,47 @@
             <diffuse>0.0 0.0 0.8 1</diffuse>
           </material>
         </visual>
+      </link>
+    </model>
+
+    <!-- RGB-D camera for AprilTag detection -->
+    <!-- Directly above table center, looking straight down -->
+    <!-- pitch=π/2 rotates camera +X axis to point in world -Z (downward) -->
+    <model name="rgbd_camera">
+      <static>true</static>
+      <pose>0.6 0.0 1.0 0 1.5708 0</pose>
+      <link name="camera_link">
+        <visual name="visual">
+          <geometry><box><size>0.05 0.05 0.05</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+        <sensor name="rgbd_camera" type="rgbd_camera">
+          <camera>
+            <horizontal_fov>1.047</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip>
+              <near>0.1</near>
+              <far>10</far>
+            </clip>
+            <depth_camera>
+              <clip>
+                <near>0.1</near>
+                <far>5</far>
+              </clip>
+            </depth_camera>
+          </camera>
+          <always_on>1</always_on>
+          <update_rate>15</update_rate>
+          <visualize>true</visualize>
+          <topic>rgbd_camera</topic>
+        </sensor>
       </link>
     </model>
 

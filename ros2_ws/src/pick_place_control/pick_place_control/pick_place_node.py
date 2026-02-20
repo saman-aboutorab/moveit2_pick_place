@@ -8,41 +8,28 @@ from pymoveit2.robots import panda
 from ament_index_python.packages import get_package_share_directory
 from moveit_msgs.msg import CollisionObject, PlanningScene as PlanningSceneMsg
 from shape_msgs.msg import SolidPrimitive
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
 
-# ── Predefined poses (matching scene_objects.yaml) ──────────────────────────
+# ── Fixed poses ──────────────────────────────────────────────────────────────
 
-# "ready" pose from SRDF — a safe home position
 HOME_JOINT_POSITIONS = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
 
-# Pre-grasp: 15cm above the red_box
-# red_box is at z=0.42, panda_link8 needs ~12cm above fingertips
-# so link8 at z=0.42+0.12+0.15 = 0.69
-PRE_GRASP_POSITION = [0.6, 0.0, 0.69]
-PRE_GRASP_QUAT_XYZW = [1.0, 0.0, 0.0, 0.0]  # pointing straight down
+# Offsets from detected tag position (tag sits on box top)
+HAND_LENGTH = 0.12        # panda_link8 → fingertips when pointing down
+PRE_GRASP_HEIGHT = 0.15   # hover above grasp point
 
-# Grasp: fingertips at red_box level (z=0.42), link8 ~12cm above
-GRASP_POSITION = [0.6, 0.0, 0.54]
-GRASP_QUAT_XYZW = [1.0, 0.0, 0.0, 0.0]
+# Orientation: end effector pointing straight down
+DOWN_QUAT_XYZW = [1.0, 0.0, 0.0, 0.0]
 
-# Lift: raise 15cm after grasping
-LIFT_POSITION = [0.6, 0.0, 0.69]
-LIFT_QUAT_XYZW = [1.0, 0.0, 0.0, 0.0]
-
-# Place: move to a different location on the table
+# Place: fixed location on the table (not vision-based)
 PLACE_POSITION = [0.5, 0.3, 0.54]
-PLACE_QUAT_XYZW = [1.0, 0.0, 0.0, 0.0]
-
-# Retreat: move up after placing to clear the object
 RETREAT_POSITION = [0.5, 0.3, 0.69]
-RETREAT_QUAT_XYZW = [1.0, 0.0, 0.0, 0.0]
 
 # Gripper joint positions
 GRIPPER_OPEN = [0.04, 0.04]
 GRIPPER_CLOSED = [0.0, 0.0]
 GRIPPER_JOINT_NAMES = ["panda_finger_joint1", "panda_finger_joint2"]
 
-# Object ID in the planning scene (must match scene_objects.yaml)
 OBJECT_ID = "red_box"
 
 
@@ -53,8 +40,9 @@ class PickPlaceNode(Node):
 
         callback_group = ReentrantCallbackGroup()
 
+        self.detected_pose = None
+
         # ── Arm interface ──
-        # Use panda_link8 (not panda_hand_tcp which doesn't exist in our URDF)
         self.moveit2 = MoveIt2(
             node=self,
             joint_names=panda.joint_names(),
@@ -69,7 +57,6 @@ class PickPlaceNode(Node):
         self.moveit2.allowed_planning_time = 5.0
 
         # ── Gripper interface ──
-        # Use a separate MoveIt2 instance for the "hand" planning group
         self.gripper = MoveIt2(
             node=self,
             joint_names=GRIPPER_JOINT_NAMES,
@@ -82,15 +69,45 @@ class PickPlaceNode(Node):
         # ── Planning scene publisher ──
         self.scene_pub = self.create_publisher(PlanningSceneMsg, '/planning_scene', 10)
 
-        # Start the sequence after delay (let move_group fully initialize)
-        self._startup_timer = self.create_timer(
-            5.0, self.run_pick_and_place, callback_group=callback_group
+        # ── Subscribe to detected pose from pose_estimator ──
+        self.create_subscription(
+            PoseStamped, '/detected_pose', self._detected_pose_cb, 10,
         )
 
-    def run_pick_and_place(self):
-        self._startup_timer.cancel()
+        # Poll for first detection before starting sequence
+        self._wait_timer = self.create_timer(
+            1.0, self._wait_for_detection, callback_group=callback_group,
+        )
+        self.get_logger().info("Waiting for object detection on /detected_pose...")
 
+    def _detected_pose_cb(self, msg):
+        self.detected_pose = msg
+
+    def _wait_for_detection(self):
+        if self.detected_pose is None:
+            return
+        self._wait_timer.cancel()
+        pos = self.detected_pose.pose.position
+        self.get_logger().info(
+            f"Object detected at x={pos.x:.3f} y={pos.y:.3f} z={pos.z:.3f} — starting sequence"
+        )
+        self.run_pick_and_place()
+
+    def run_pick_and_place(self):
         self.get_logger().info("=== Starting Pick-and-Place Sequence ===")
+
+        # Compute pick poses from detected tag position
+        tag = self.detected_pose.pose.position
+        grasp_z = tag.z + HAND_LENGTH       # link8 height so fingertips reach tag z
+        pre_grasp_z = grasp_z + PRE_GRASP_HEIGHT
+
+        grasp_pos = [tag.x, tag.y, grasp_z]
+        pre_grasp_pos = [tag.x, tag.y, pre_grasp_z]
+        lift_pos = [tag.x, tag.y, pre_grasp_z]
+
+        self.get_logger().info(
+            f"  Grasp: {grasp_pos}  Pre-grasp/Lift: {pre_grasp_pos}"
+        )
 
         # Step 1: Move to home (BEFORE loading collision objects)
         self._move_to_home()
@@ -102,10 +119,10 @@ class PickPlaceNode(Node):
         self._open_gripper()
 
         # Step 4: Move to pre-grasp
-        self._move_to_pose("PRE-GRASP", PRE_GRASP_POSITION, PRE_GRASP_QUAT_XYZW)
+        self._move_to_pose("PRE-GRASP", pre_grasp_pos, DOWN_QUAT_XYZW)
 
         # Step 5: Descend to grasp pose
-        self._move_to_pose("GRASP", GRASP_POSITION, GRASP_QUAT_XYZW, cartesian=True)
+        self._move_to_pose("GRASP", grasp_pos, DOWN_QUAT_XYZW, cartesian=True)
 
         # Step 6: Close gripper
         self._close_gripper()
@@ -114,10 +131,10 @@ class PickPlaceNode(Node):
         self._attach_object()
 
         # Step 8: Lift
-        self._move_to_pose("LIFT", LIFT_POSITION, LIFT_QUAT_XYZW, cartesian=True)
+        self._move_to_pose("LIFT", lift_pos, DOWN_QUAT_XYZW, cartesian=True)
 
         # Step 9: Move to place pose
-        self._move_to_pose("PLACE", PLACE_POSITION, PLACE_QUAT_XYZW)
+        self._move_to_pose("PLACE", PLACE_POSITION, DOWN_QUAT_XYZW)
 
         # Step 10: Open gripper
         self._open_gripper()
@@ -126,7 +143,7 @@ class PickPlaceNode(Node):
         self._detach_object()
 
         # Step 12: Retreat up to clear the object
-        self._move_to_pose("RETREAT", RETREAT_POSITION, RETREAT_QUAT_XYZW, cartesian=True)
+        self._move_to_pose("RETREAT", RETREAT_POSITION, DOWN_QUAT_XYZW, cartesian=True)
 
         # Step 13: Return to home
         self._move_to_home()

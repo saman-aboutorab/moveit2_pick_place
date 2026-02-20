@@ -1,6 +1,6 @@
 import os
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import AppendEnvironmentVariable, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
@@ -11,6 +11,12 @@ from launch.substitutions import Command
 def generate_launch_description():
     pkg_arm_bringup = FindPackageShare('arm_bringup')
     pkg_ros_gz_sim = FindPackageShare('ros_gz_sim')
+
+    # Let Gazebo find our custom models (e.g. red_box_apriltag)
+    set_gz_resource_path = AppendEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=PathJoinSubstitution([pkg_arm_bringup, 'models']),
+    )
 
     # World file
     world_file = PathJoinSubstitution([
@@ -76,12 +82,27 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Bridge Gazebo camera topics to ROS2
+    gz_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=[
+            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+            '/rgbd_camera/image@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/rgbd_camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/rgbd_camera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo',
+        ],
+        output='screen',
+    )
+
     return LaunchDescription([
+        set_gz_resource_path,
         gazebo,
         robot_state_publisher,
         spawn_robot,
         joint_state_broadcaster,
         arm_controller,
         hand_controller,
+        gz_bridge,
     ])
 

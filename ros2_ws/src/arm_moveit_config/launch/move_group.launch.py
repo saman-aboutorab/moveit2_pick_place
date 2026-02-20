@@ -1,6 +1,7 @@
 import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import UnlessCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -13,6 +14,12 @@ def generate_launch_description():
         "ros2_control_hardware_type",
         default_value="mock_components",
         description="ROS 2 control hardware interface type",
+    )
+
+    use_gazebo = DeclareLaunchArgument(
+        "use_gazebo",
+        default_value="false",
+        description="Skip ros2_control/spawners when Gazebo provides them",
     )
 
     moveit_config = (
@@ -70,7 +77,7 @@ def generate_launch_description():
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
-        parameters=[moveit_config.to_dict()],
+        parameters=[moveit_config.to_dict(), {'use_sim_time': True}],
     )
 
     # RViz
@@ -90,6 +97,7 @@ def generate_launch_description():
             moveit_config.planning_pipelines,
             moveit_config.robot_description_kinematics,
             moveit_config.joint_limits,
+            {'use_sim_time': True},
         ],
     )
 
@@ -101,12 +109,15 @@ def generate_launch_description():
         arguments=["0", "0", "0", "0", "0", "0", "world", "panda_link0"],
     )
 
+    # --- Only launched when NOT using Gazebo (mock_components mode) ---
+
     # Robot state publisher
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="both",
         parameters=[moveit_config.robot_description],
+        condition=UnlessCondition(LaunchConfiguration("use_gazebo")),
     )
 
     # ros2_control node (for mock_components mode)
@@ -123,6 +134,7 @@ def generate_launch_description():
             ("/controller_manager/robot_description", "/robot_description"),
         ],
         output="screen",
+        condition=UnlessCondition(LaunchConfiguration("use_gazebo")),
     )
 
     # Controller spawners
@@ -130,20 +142,24 @@ def generate_launch_description():
         package="controller_manager",
         executable="spawner",
         arguments=["joint_state_broadcaster", "-c", "/controller_manager"],
+        condition=UnlessCondition(LaunchConfiguration("use_gazebo")),
     )
     arm_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["panda_arm_controller", "-c", "/controller_manager"],
+        condition=UnlessCondition(LaunchConfiguration("use_gazebo")),
     )
     hand_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["hand_trajectory_controller", "-c", "/controller_manager"],
+        condition=UnlessCondition(LaunchConfiguration("use_gazebo")),
     )
 
     return LaunchDescription([
         ros2_control_hardware_type,
+        use_gazebo,
         static_tf,
         robot_state_publisher,
         ros2_control_node,
