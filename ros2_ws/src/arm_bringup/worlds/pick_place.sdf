@@ -92,6 +92,31 @@
       </link>
     </model>
 
+    <!-- Blue box for VLM/open-vocabulary detection (Phase 2C) -->
+    <!-- Uniformly blue 4cm cube — detected via text prompt "blue box" -->
+    <model name="blue_box">
+      <pose>0.6 -0.12 0.42 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.1</mass>
+          <inertia>
+            <ixx>0.0000267</ixx><iyy>0.0000267</iyy><izz>0.0000267</izz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.04 0.04 0.04</size></box></geometry>
+          <material>
+            <ambient>0.0 0.2 1.0 1</ambient>
+            <diffuse>0.0 0.2 1.0 1</diffuse>
+            <specular>0.0 0.05 0.3 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
     <!-- Blue cylinder on table (matches scene_objects.yaml: h=0.08 r=0.02 at x=0.7) -->
     <model name="blue_cylinder">
       <pose>0.7 0.2 0.44 0 0 0</pose>

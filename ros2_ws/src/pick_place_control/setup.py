@@ -30,7 +30,7 @@ setup(
             'pick_place_node = pick_place_control.pick_place_node:main',
             'pose_estimator = pick_place_control.pose_estimator:main',
             'yolo_detector = pick_place_control.yolo_detector:main',
-
+            'vlm_detector = pick_place_control.vlm_detector:main',
         ],
     },
 

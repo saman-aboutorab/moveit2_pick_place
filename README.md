@@ -174,14 +174,39 @@ to carry the object. This is a known limitation of fake/position-controlled hard
 
 Dependencies: ultralytics (pip install ultralytics --break-system-packages)
 
-Phase 2C — Open-Vocabulary Language-Guided Grasping (Planned)
+Phase 2C — Open-Vocabulary Language-Guided Grasping (Complete — v1.2)
 
-Accept natural language commands: "Pick up the red box"
-Use a vision-language model (OWL-ViT / GroundingDINO) for open-vocabulary detection
-Parse text commands to identify target object and placement
-Technologies: VLM, text-to-task parsing, semantic scene reasoning
+Replace fixed class-name detection with open-vocabulary vision-language model (VLM).
+The robot detects objects described in plain text ("blue box") rather than hardcoded
+colour masks or trained class labels.
 
-Detection method: Vision-language model. Detects objects from text descriptions.
+Components:
+
+1. VLM detector node (vlm_detector.py) — replaces yolo_detector.py
+   - Subscribes to /rgbd_camera/image (RGB) and /rgbd_camera/depth_image
+   - Accepts target_object ROS2 parameter (default: "blue box") — no code changes needed
+     to switch target; just set the parameter at launch time
+   - Runs OWL-ViT (via HuggingFace transformers) on the RGB frame using the text prompt
+   - OWL-ViT outputs bounding boxes scored by text-image similarity — no class training
+   - Computes bounding box centre pixel (u, v) from highest-confidence detection
+   - Reads depth value d at (u, v) from the depth image
+   - Projects (u, v, d) to 3D world coordinates using camera intrinsics + extrinsics
+     (identical projection pipeline to yolo_detector.py)
+   - Publishes on /detected_pose (PoseStamped) — same topic, same message type
+
+2. Gazebo world additions:
+   - blue_box: uniformly blue 4cm cube at (0.6, -0.12, 0.42) — the Phase 2C target
+     positioned symmetrically opposite the YOLO red box on the table
+
+3. Launch argument:
+   - detector:=vlm — selects vlm_detector with target_object:="blue box"
+   - target_object parameter can be overridden at launch for any text description
+
+Detection method: Vision-language model (OWL-ViT). No markers, no colour rules, no
+trained classes — detects objects purely from natural language descriptions.
+Accuracy: ~1-2cm (same depth centroid pipeline as Phase 2B).
+
+Dependencies: transformers, torch (pip install transformers torch --break-system-packages)
 
 The manipulation execution pipeline (MoveIt2) remains unchanged across all phases.
 
@@ -212,7 +237,8 @@ All detectors publish to `/detected_pose` so the orchestrator works with any of 
 Tags:
   v0.1–v0.7  Phase 1 (deterministic baseline)
   v0.8–v1.0  Phase 2A (AprilTag)
-  v1.1+      Phase 2B (YOLO)
+  v1.1       Phase 2B (YOLO)
+  v1.2+      Phase 2C (VLM)
 
 Repository Structure
 
@@ -237,6 +263,7 @@ moveit2_pick_place/
 │   │       │   ├── pick_place_node.py    # Orchestrator (vision-based)
 │   │       │   ├── pose_estimator.py     # Phase 2A: AprilTag detector
 │   │       │   ├── yolo_detector.py      # Phase 2B: YOLO detector
+│   │       │   ├── vlm_detector.py       # Phase 2C: OWL-ViT detector
 │   │       │   └── planning_scene_loader.py
 │   │       └── launch/
 │   │           └── pick_place_demo.launch.py  # Single-command demo (detector:= arg)
@@ -282,6 +309,9 @@ ros2 launch pick_place_control pick_place_demo.launch.py detector:=apriltag
 # YOLO detector (Phase 2B):
 ros2 launch pick_place_control pick_place_demo.launch.py detector:=yolo
 
+# VLM detector (Phase 2C):
+ros2 launch pick_place_control pick_place_demo.launch.py detector:=vlm
+
 The sequence is the same regardless of detector:
 1. Detector node identifies the object and publishes its world-frame position
 2. Pick-and-place node receives the detected pose
@@ -323,6 +353,16 @@ Phase 2B (v1.1):
   ✓ Gripper open/close via direct topic publish (bypasses MoveIt2 bounds-check issue)
   ✓ Robot base anchored in Gazebo (world_joint); gripper mimic joint handled correctly
   Note: physical box lift limited by low-gain PD control in fake hardware (see Phase 2B note)
+
+Phase 2C (v1.2):
+  ✓ Blue box added to Gazebo world as Phase 2C target object
+  ✓ detector:=vlm wired into launch file with target_object parameter
+  ✓ OWL-ViT VLM detector node (vlm_detector.py) implemented
+  ✓ Open-vocabulary detection confirmed on blue box in simulation
+  ✓ End-to-end Gazebo pick-and-place with VLM detection works
+  Note: cv_bridge bypassed (NumPy 2.x incompatibility); ROS Image converted via numpy frombuffer
+  Note: processor.image_processor.post_process_object_detection() required (transformers>=4.30)
+  Note: physical box slides rather than lifts (same low-gain PD control limitation as Phase 2B)
 
 Technical Focus
 
