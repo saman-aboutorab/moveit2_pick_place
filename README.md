@@ -15,7 +15,7 @@ MoveIt2 motion planning
 
 ros2_control for joint and gripper control
 
-OpenCV AprilTag detection for vision-based pose estimation
+Multiple perception backends (AprilTag, YOLO, VLM) — switchable via launch argument
 
 The goal of this project is to build a clean, modular manipulation system that:
 
@@ -23,9 +23,9 @@ Spawns a robot arm and scene in Gazebo
 
 Plans collision-free trajectories using MoveIt2
 
-Detects objects using computer vision (AprilTag)
+Detects objects using interchangeable computer vision backends
 
-Computes 6D object pose from camera images
+Computes 3D object pose from camera images
 
 Executes grasp, lift, and placement motions using detected coordinates
 
@@ -37,7 +37,7 @@ Motion planning and collision avoidance (MoveIt2)
 
 Robot control integration (ros2_control, gz_ros2_control)
 
-Computer vision and pose estimation (OpenCV, solvePnP)
+Computer vision and pose estimation (OpenCV, YOLO, solvePnP)
 
 Simulation setup and physics validation (Gazebo Harmonic)
 
@@ -48,6 +48,36 @@ Clean ROS2 package architecture
 Orchestrated manipulation behavior
 
 It complements mobile robot autonomy projects by showcasing manipulation, perception, and planning capabilities.
+
+Architecture
+
+The system is designed with a clean separation between perception and manipulation.
+All detector backends publish to the same `/detected_pose` topic, so the pick-and-place
+node works identically regardless of which detector is running:
+
+  Gazebo (RGB-D camera)
+       │
+       ├── /rgbd_camera/image
+       ├── /rgbd_camera/depth_image
+       └── /rgbd_camera/camera_info
+              │
+              ▼
+  ┌─────────────────────────┐
+  │   Detector Node         │  ← swappable via detector:= launch arg
+  │   (apriltag / yolo / vlm)│
+  └────────────┬────────────┘
+               │ /detected_pose (PoseStamped)
+               ▼
+  ┌─────────────────────────┐
+  │   pick_place_node       │  ← unchanged across all phases
+  │   (MoveIt2 orchestrator)│
+  └─────────────────────────┘
+
+Switching detectors:
+
+  ros2 launch pick_place_control pick_place_demo.launch.py detector:=apriltag  # Phase 2A
+  ros2 launch pick_place_control pick_place_demo.launch.py detector:=yolo      # Phase 2B
+  ros2 launch pick_place_control pick_place_demo.launch.py detector:=vlm       # Phase 2C
 
 Phase 1 — Deterministic Pick-and-Place (Baseline)
 
@@ -65,15 +95,13 @@ Pipeline:
 
 Move to home pose → Pre-grasp → Grasp → Close gripper → Lift → Place → Open gripper → Return home
 
-Phase 2A — AprilTag Vision-Based Pick-and-Place (Current)
+Phase 1 is preserved in git history (tags v0.1–v0.7).
+
+Phase 2A — AprilTag Vision-Based Pick-and-Place
 
 Instead of hardcoded grasp coordinates, the robot sees the object through an overhead
 RGB-D camera, detects an AprilTag on the box, computes its 3D world-frame pose via
 classical geometry (solvePnP), and sends that pose to MoveIt2 for grasp planning.
-
-Architecture:
-
-  Gazebo (RGB-D camera) → ros_gz_bridge → pose_estimator → /detected_pose → pick_place_node → MoveIt2
 
 Components:
 
@@ -87,31 +115,64 @@ Components:
    - Applied as PBR albedo texture on top face of the 0.04m red cube
    - Model uses Gazebo model:// URI for texture resolution
 
-3. Pose estimator node (pick_place_control/pose_estimator.py)
+3. Pose estimator node (pose_estimator.py)
    - Subscribes to /rgbd_camera/image (RGB) and /rgbd_camera/camera_info
    - Detects AprilTag using OpenCV's cv2.aruco with DICT_APRILTAG_36h11
    - Computes 6D pose via cv2.solvePnP with known tag size + camera intrinsics
-   - Transforms pose from camera optical frame to world frame using precomputed transform
-   - Publishes result on /detected_pose (PoseStamped) — accurate to ~1mm
+   - Transforms pose from camera optical frame to world frame
+   - Publishes on /detected_pose (PoseStamped) — accurate to ~1mm
 
-4. Modified pick-and-place node (pick_place_control/pick_place_node.py)
-   - Subscribes to /detected_pose instead of using hardcoded coordinates
-   - Waits for first detection before starting the sequence
-   - Computes pre-grasp/grasp/lift poses relative to detected tag position
-   - Place location remains fixed (not vision-based)
-   - Gripper control, attach/detach, and planning scene remain unchanged
+Detection method: Classical geometry (no ML). Requires a fiducial marker on the object.
 
-5. Sim time synchronization
-   - /clock topic bridged from Gazebo to ROS2
-   - All nodes use use_sim_time: true for proper timestamp coordination
-   - move_group.launch.py supports use_gazebo flag to skip mock controllers
+Phase 2B — YOLO + Depth Centroid (Complete — v1.1)
 
-Phase 2B — YOLO + Depth Centroid (Planned)
+Replace the AprilTag detector with YOLOv8 neural network object detection.
+The robot detects the red box by appearance (no marker needed), then uses the
+depth image to compute the object's 3D position.
 
-Replace AprilTags with YOLO-based object detection
-Use depth image to compute 3D centroid of detected objects
-Handle arbitrary objects without fiducial markers
-Technologies: YOLOv8, depth processing, ROS2 image pipeline
+Components:
+
+1. YOLO detector node (yolo_detector.py) — replaces pose_estimator.py
+   - Subscribes to /rgbd_camera/image (RGB) and /rgbd_camera/depth_image
+   - Runs YOLOv8 inference on RGB frame to detect objects by class
+   - Falls back to HSV colour masking for plain geometric Gazebo objects
+     (COCO-trained YOLOv8 does not recognise plain simulation geometry)
+   - Computes bounding box centre pixel (u, v)
+   - Reads depth value d at that pixel from the depth image
+   - Projects (u, v, d) to 3D world coordinates using camera intrinsics + extrinsics:
+       x_cam = (u - cx) * d / fx
+       y_cam = (v - cy) * d / fy
+       z_cam = d
+   - Transforms from camera optical frame to world frame (same transform as 2A)
+   - Publishes on /detected_pose (PoseStamped) — same topic, same message type
+
+2. Gazebo world additions:
+   - red_box_plain: uniformly red 4cm cube at (0.6, 0.12, 0.42) — no AprilTag texture
+     so the colour-based fallback can detect it cleanly
+
+3. Gripper control (pick_place_node.py):
+   - Publishes JointTrajectory directly to /hand_trajectory_controller/joint_trajectory
+   - Bypasses MoveIt2 planning to avoid a start-state bounds-check failure caused by
+     panda_finger_joint2 being driven to a negative position by gz_ros2_control's
+     internal mimic logic (rclpy ActionClient also had executor thread conflicts)
+
+4. Infrastructure fixes applied during this phase:
+   - world link + world_joint added to URDF to anchor robot base in Gazebo physics
+   - hand_trajectory_controller (JointTrajectoryController) replaces GripperActionController
+   - panda_finger_joint2 removed from controller joints list (mimic — no command interface)
+   - Grasp height offset: fingertips target box midpoint, not top surface (BOX_HALF_HEIGHT)
+   - Detach-before-open ordering + 1s physics settling delay before retreat
+
+Detection method: Neural network (YOLOv8) with HSV colour fallback. No markers needed.
+Accuracy: ~1-2cm (position only from depth centroid; orientation assumed fixed downward).
+
+Simulation note: gz_ros2_control uses low-gain PD position control for the gripper.
+Contact forces are not strong enough to physically lift the box in Gazebo. The
+pick-and-place trajectory (pre-grasp → grasp → lift → place) executes correctly and
+the arm physically lifts; on a real Panda the gripper would generate sufficient force
+to carry the object. This is a known limitation of fake/position-controlled hardware.
+
+Dependencies: ultralytics (pip install ultralytics --break-system-packages)
 
 Phase 2C — Open-Vocabulary Language-Guided Grasping (Planned)
 
@@ -120,7 +181,38 @@ Use a vision-language model (OWL-ViT / GroundingDINO) for open-vocabulary detect
 Parse text commands to identify target object and placement
 Technologies: VLM, text-to-task parsing, semantic scene reasoning
 
+Detection method: Vision-language model. Detects objects from text descriptions.
+
 The manipulation execution pipeline (MoveIt2) remains unchanged across all phases.
+
+Branching & Git Strategy
+
+Each phase is developed on a feature branch, then merged into main when complete.
+All detector backends coexist as separate files on main — no conflicts between phases.
+
+  main ─────────── merge 2A ─── merge 2B ─── merge 2C ──→
+    \              /              /              /
+     feature/phase-2a-apriltag  /              /
+                    \          /              /
+                     feature/phase-2b-yolo  /
+                                  \        /
+                                   feature/phase-2c-vlm
+
+Files on main after all phases:
+
+  pick_place_control/
+    ├── pose_estimator.py     # Phase 2A — AprilTag + solvePnP
+    ├── yolo_detector.py      # Phase 2B — YOLO + depth centroid
+    ├── vlm_detector.py       # Phase 2C — Vision-language model
+    └── pick_place_node.py    # Shared orchestrator (unchanged)
+
+The demo launch file uses a `detector` argument to select which backend to run.
+All detectors publish to `/detected_pose` so the orchestrator works with any of them.
+
+Tags:
+  v0.1–v0.7  Phase 1 (deterministic baseline)
+  v0.8–v1.0  Phase 2A (AprilTag)
+  v1.1+      Phase 2B (YOLO)
 
 Repository Structure
 
@@ -143,10 +235,11 @@ moveit2_pick_place/
 │   │   └── pick_place_control/   # Python nodes
 │   │       ├── pick_place_control/
 │   │       │   ├── pick_place_node.py    # Orchestrator (vision-based)
-│   │       │   ├── pose_estimator.py     # AprilTag detection + PnP
+│   │       │   ├── pose_estimator.py     # Phase 2A: AprilTag detector
+│   │       │   ├── yolo_detector.py      # Phase 2B: YOLO detector
 │   │       │   └── planning_scene_loader.py
 │   │       └── launch/
-│   │           └── pick_place_demo.launch.py  # Single-command demo
+│   │           └── pick_place_demo.launch.py  # Single-command demo (detector:= arg)
 │   │
 │   ├── build/
 │   ├── install/
@@ -162,6 +255,7 @@ Prerequisites:
 - Gazebo Harmonic
 - MoveIt2
 - Python packages: opencv-python, scipy, numpy
+- For Phase 2B: ultralytics (pip install ultralytics)
 
 Build:
 
@@ -169,47 +263,35 @@ cd ros2_ws
 colcon build
 source install/setup.bash
 
-Option A: Vision-Based Pick-and-Place with Gazebo (Phase 2A)
+Vision-Based Pick-and-Place with Gazebo
 
 Terminal 1 — Gazebo simulation:
 
 ros2 launch arm_bringup gazebo.launch.py
 
-This starts Gazebo with the table, red box (with AprilTag), RGB-D camera, and robot.
+This starts Gazebo with the table, red box, RGB-D camera, and robot.
 Controllers and camera bridge (including /clock) are spawned automatically.
 
-Terminal 2 — MoveIt2 + vision + pick-and-place:
+Terminal 2 — MoveIt2 + detector + pick-and-place:
 
 source install/setup.bash
-ros2 launch pick_place_control pick_place_demo.launch.py
 
-This launches move_group, RViz, the pose estimator, and the pick-and-place node.
-The sequence:
-1. Pose estimator detects the AprilTag and publishes the box position
+# AprilTag detector (Phase 2A):
+ros2 launch pick_place_control pick_place_demo.launch.py detector:=apriltag
+
+# YOLO detector (Phase 2B):
+ros2 launch pick_place_control pick_place_demo.launch.py detector:=yolo
+
+The sequence is the same regardless of detector:
+1. Detector node identifies the object and publishes its world-frame position
 2. Pick-and-place node receives the detected pose
 3. Robot moves: home → pre-grasp → grasp → close → lift → place → open → retreat → home
 
-Option B: Deterministic Pick-and-Place with Mock Controllers (Phase 1)
-
-ros2 launch arm_moveit_config move_group.launch.py
-
-Then in a separate terminal:
-
-ros2 run pick_place_control pick_place_node
-
-Or use the single-command demo (mock controllers):
-
-ros2 launch pick_place_control pick_place_demo.launch.py
-
-Option C: Manual Exploration
+Manual Exploration
 
 Display robot in RViz (no simulation):
 
 ros2 launch arm_bringup display.launch.py
-
-Launch Gazebo only:
-
-ros2 launch arm_bringup gazebo.launch.py
 
 Launch MoveIt2 with mock controllers:
 
@@ -233,6 +315,15 @@ Phase 2A (v0.8–v1.0):
   ✓ Sim time synchronization (clock bridge + use_sim_time)
   ✓ End-to-end Gazebo pick-and-place works
 
+Phase 2B (v1.1):
+  ✓ YOLOv8 detects red box without fiducial markers (HSV fallback for Gazebo geometry)
+  ✓ Depth centroid provides accurate 3D object position (~1-2cm)
+  ✓ Detector switchable via launch argument (detector:=yolo / detector:=apriltag)
+  ✓ End-to-end Gazebo pick-and-place executes correctly
+  ✓ Gripper open/close via direct topic publish (bypasses MoveIt2 bounds-check issue)
+  ✓ Robot base anchored in Gazebo (world_joint); gripper mimic joint handled correctly
+  Note: physical box lift limited by low-gain PD control in fake hardware (see Phase 2B note)
+
 Technical Focus
 
 This project emphasizes:
@@ -243,14 +334,16 @@ Proper use of TF transforms and coordinate frame reasoning
 
 Classical computer vision (AprilTag detection, PnP pose estimation)
 
+Deep learning vision (YOLO object detection)
+
 Collision-aware trajectory generation
 
 Sim time synchronization between Gazebo and ROS2
 
 Reusable and modular ROS2 package design
 
-The architecture is intentionally structured to support AI perception modules
-without rewriting the manipulation pipeline.
+The architecture is intentionally structured so that swapping the perception
+backend requires only a new detector node — the manipulation pipeline is untouched.
 
 Long-Term Vision
 
