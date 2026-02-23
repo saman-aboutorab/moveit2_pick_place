@@ -2,3 +2,6 @@ ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
 .vscode/
+# YOLOv8 / PyTorch model weights (large binary, downloaded at runtime)
+ros2_ws/*.pt
+ros2_ws/**/*.pt

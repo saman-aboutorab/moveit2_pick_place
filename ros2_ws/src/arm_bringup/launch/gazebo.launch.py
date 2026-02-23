@@ -78,7 +78,7 @@ def generate_launch_description():
     hand_controller = Node(
         package='controller_manager',
         executable='spawner',
-        arguments=['panda_hand_controller'],
+        arguments=['hand_trajectory_controller'],
         output='screen',
     )
 

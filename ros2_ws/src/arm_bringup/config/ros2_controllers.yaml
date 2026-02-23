@@ -44,5 +44,4 @@ hand_trajectory_controller:
       - velocity
     joints:
       - panda_finger_joint1
-      - panda_finger_joint2
     allow_nonzero_velocity_at_trajectory_end: true

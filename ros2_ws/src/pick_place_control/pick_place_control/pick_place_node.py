@@ -1,4 +1,5 @@
 import os
+import time
 import yaml
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -6,6 +7,8 @@ from rclpy.node import Node
 from pymoveit2 import MoveIt2
 from pymoveit2.robots import panda
 from ament_index_python.packages import get_package_share_directory
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from builtin_interfaces.msg import Duration as BuiltinDuration
 from moveit_msgs.msg import CollisionObject, PlanningScene as PlanningSceneMsg
 from shape_msgs.msg import SolidPrimitive
 from geometry_msgs.msg import Pose, PoseStamped
@@ -16,6 +19,7 @@ HOME_JOINT_POSITIONS = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
 
 # Offsets from detected tag position (tag sits on box top)
 HAND_LENGTH = 0.12        # panda_link8 → fingertips when pointing down
+BOX_HALF_HEIGHT = 0.02    # depth camera sees box top; grasp at midpoint (0.04/2)
 PRE_GRASP_HEIGHT = 0.15   # hover above grasp point
 
 # Orientation: end effector pointing straight down
@@ -25,10 +29,10 @@ DOWN_QUAT_XYZW = [1.0, 0.0, 0.0, 0.0]
 PLACE_POSITION = [0.5, 0.3, 0.54]
 RETREAT_POSITION = [0.5, 0.3, 0.69]
 
-# Gripper joint positions
-GRIPPER_OPEN = [0.04, 0.04]
-GRIPPER_CLOSED = [0.0, 0.0]
-GRIPPER_JOINT_NAMES = ["panda_finger_joint1", "panda_finger_joint2"]
+# Gripper joint positions (joint2 is mimic — gz_ros2_control mirrors joint1 automatically)
+GRIPPER_OPEN = [0.04]
+GRIPPER_CLOSED = [0.0]
+GRIPPER_JOINT_NAMES = ["panda_finger_joint1"]
 
 OBJECT_ID = "red_box"
 
@@ -56,14 +60,13 @@ class PickPlaceNode(Node):
         self.moveit2.num_planning_attempts = 10
         self.moveit2.allowed_planning_time = 5.0
 
-        # ── Gripper interface ──
-        self.gripper = MoveIt2(
-            node=self,
-            joint_names=GRIPPER_JOINT_NAMES,
-            base_link_name=panda.base_link_name(),
-            end_effector_name="panda_hand",
-            group_name="hand",
-            callback_group=callback_group,
+        # ── Gripper interface (direct topic publish to controller) ──
+        # Uses JointTrajectoryController's topic interface — no action, no MoveIt2,
+        # no start-state bounds check. Avoids rclpy ActionClient executor conflicts.
+        self._gripper_pub = self.create_publisher(
+            JointTrajectory,
+            '/hand_trajectory_controller/joint_trajectory',
+            10,
         )
 
         # ── Planning scene publisher ──
@@ -98,7 +101,7 @@ class PickPlaceNode(Node):
 
         # Compute pick poses from detected tag position
         tag = self.detected_pose.pose.position
-        grasp_z = tag.z + HAND_LENGTH       # link8 height so fingertips reach tag z
+        grasp_z = tag.z - BOX_HALF_HEIGHT + HAND_LENGTH  # fingertips at box midpoint, not top
         pre_grasp_z = grasp_z + PRE_GRASP_HEIGHT
 
         grasp_pos = [tag.x, tag.y, grasp_z]
@@ -136,11 +139,14 @@ class PickPlaceNode(Node):
         # Step 9: Move to place pose
         self._move_to_pose("PLACE", PLACE_POSITION, DOWN_QUAT_XYZW)
 
-        # Step 10: Open gripper
+        # Step 10: Detach object from planning scene first
+        self._detach_object()
+
+        # Step 11: Open gripper
         self._open_gripper()
 
-        # Step 11: Detach object
-        self._detach_object()
+        # Let Gazebo physics simulate the box dropping before retreating
+        time.sleep(1.0)
 
         # Step 12: Retreat up to clear the object
         self._move_to_pose("RETREAT", RETREAT_POSITION, DOWN_QUAT_XYZW, cartesian=True)
@@ -168,17 +174,25 @@ class PickPlaceNode(Node):
         self.moveit2.wait_until_executed()
         self.get_logger().info(f"[{label}] Done.")
 
+    def _move_gripper(self, position, label):
+        """Publish gripper trajectory to controller topic (fire-and-forget, no callbacks)."""
+        self.get_logger().info(f"[GRIPPER] {label}...")
+        traj = JointTrajectory()
+        traj.joint_names = GRIPPER_JOINT_NAMES
+        pt = JointTrajectoryPoint()
+        pt.positions = [position]
+        pt.velocities = [0.0]
+        pt.time_from_start = BuiltinDuration(sec=2, nanosec=0)
+        traj.points = [pt]
+        self._gripper_pub.publish(traj)
+        time.sleep(2.5)  # 2s trajectory duration + 0.5s buffer (wall-clock, real_time_factor=1)
+        self.get_logger().info(f"[GRIPPER] {label} done.")
+
     def _open_gripper(self):
-        self.get_logger().info("[GRIPPER] Opening...")
-        self.gripper.move_to_configuration(GRIPPER_OPEN, joint_names=GRIPPER_JOINT_NAMES)
-        self.gripper.wait_until_executed()
-        self.get_logger().info("[GRIPPER] Open.")
+        self._move_gripper(GRIPPER_OPEN[0], "Opening")
 
     def _close_gripper(self):
-        self.get_logger().info("[GRIPPER] Closing...")
-        self.gripper.move_to_configuration(GRIPPER_CLOSED, joint_names=GRIPPER_JOINT_NAMES)
-        self.gripper.wait_until_executed()
-        self.get_logger().info("[GRIPPER] Closed.")
+        self._move_gripper(GRIPPER_CLOSED[0], "Closing")
 
     def _attach_object(self):
         self.get_logger().info(f"[SCENE] Attaching '{OBJECT_ID}' to end effector...")

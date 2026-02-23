@@ -3,6 +3,14 @@
     <xacro:arg name="initial_positions_file" default="$(find arm_bringup)/config/initial_positions.yaml" />
     <xacro:arg name="ros2_control_hardware_type" default="mock_components" />
 
+    <!-- Fix robot base to world so Gazebo doesn't apply gravity to the base link -->
+    <link name="world"/>
+    <joint name="world_joint" type="fixed">
+        <parent link="world"/>
+        <child link="panda_link0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
     <!-- Import panda urdf file -->
     <xacro:include filename="$(find moveit_resources_panda_description)/urdf/panda.urdf.xacro" />
 
