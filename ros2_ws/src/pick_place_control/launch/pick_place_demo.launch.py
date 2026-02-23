@@ -11,7 +11,7 @@ def generate_launch_description():
     detector_arg = DeclareLaunchArgument(
         'detector',
         default_value='apriltag',
-        description='Detector backend to use: apriltag | yolo',
+        description='Detector backend to use: apriltag | yolo | vlm',
     )
     detector = LaunchConfiguration('detector')
 
@@ -45,6 +45,18 @@ def generate_launch_description():
         condition=IfCondition(EqualsSubstitution(detector, 'yolo')),
     )
 
+    # Phase 2C — OWL-ViT open-vocabulary detector
+    vlm_detector = Node(
+        package='pick_place_control',
+        executable='vlm_detector',
+        output='screen',
+        parameters=[
+            {'use_sim_time': True},
+            {'target_object': 'blue box'},
+        ],
+        condition=IfCondition(EqualsSubstitution(detector, 'vlm')),
+    )
+
     # Pick-and-place orchestrator — delayed to let move_group fully initialize
     pick_place_node = TimerAction(
         period=8.0,
@@ -63,5 +75,6 @@ def generate_launch_description():
         move_group_launch,
         pose_estimator,
         yolo_detector,
+        vlm_detector,
         pick_place_node,
     ])
