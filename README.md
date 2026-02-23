@@ -174,7 +174,7 @@ to carry the object. This is a known limitation of fake/position-controlled hard
 
 Dependencies: ultralytics (pip install ultralytics --break-system-packages)
 
-Phase 2C — Open-Vocabulary Language-Guided Grasping (In Progress)
+Phase 2C — Open-Vocabulary Language-Guided Grasping (Complete — v1.2)
 
 Replace fixed class-name detection with open-vocabulary vision-language model (VLM).
 The robot detects objects described in plain text ("blue box") rather than hardcoded
@@ -354,12 +354,15 @@ Phase 2B (v1.1):
   ✓ Robot base anchored in Gazebo (world_joint); gripper mimic joint handled correctly
   Note: physical box lift limited by low-gain PD control in fake hardware (see Phase 2B note)
 
-Phase 2C (in progress):
+Phase 2C (v1.2):
   ✓ Blue box added to Gazebo world as Phase 2C target object
   ✓ detector:=vlm wired into launch file with target_object parameter
-  ○ OWL-ViT VLM detector node (vlm_detector.py) implemented
-  ○ Open-vocabulary detection confirmed on blue box in simulation
-  ○ End-to-end Gazebo pick-and-place with VLM detection works
+  ✓ OWL-ViT VLM detector node (vlm_detector.py) implemented
+  ✓ Open-vocabulary detection confirmed on blue box in simulation
+  ✓ End-to-end Gazebo pick-and-place with VLM detection works
+  Note: cv_bridge bypassed (NumPy 2.x incompatibility); ROS Image converted via numpy frombuffer
+  Note: processor.image_processor.post_process_object_detection() required (transformers>=4.30)
+  Note: physical box slides rather than lifts (same low-gain PD control limitation as Phase 2B)
 
 Technical Focus
 
